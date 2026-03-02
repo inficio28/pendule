@@ -1,53 +1,221 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="fr">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Jeu de mots à deviner</title>
-  <link rel="stylesheet" href="styles.css" />
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Rat Destroyer - Égouts</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #1a1a2e; color: #fff; font-family: Arial, sans-serif; overflow: hidden; user-select: none; }
+  canvas { position: fixed; top: 0; left: 0; cursor: crosshair; }
+  #hud { position: fixed; top: 0; left: 0; right: 0; background: rgba(0,0,0,0.85); border-bottom: 2px solid #4a4a00; padding: 8px 15px; display: flex; align-items: center; gap: 15px; flex-wrap: wrap; z-index: 100; font-size: 13px; }
+  .hud-label { color: #aaa; } .hud-val { color: #fff; font-weight: bold; }
+  #levelDisplay { color: #FFD700; font-size: 16px; font-weight: bold; }
+  #toolbar { position: fixed; bottom: 0; left: 0; right: 0; background: rgba(0,0,0,0.9); border-top: 2px solid #4a4a00; display: flex; justify-content: center; align-items: center; gap: 6px; padding: 8px; z-index: 100; flex-wrap: wrap; }
+  .tool-btn { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 7px 10px; border: 2px solid #555; border-radius: 10px; cursor: pointer; background: rgba(255,255,255,0.05); transition: all 0.2s; min-width: 60px; font-size: 11px; color: #ddd; }
+  .tool-btn:hover { background: rgba(255,255,255,0.15); transform: translateY(-2px); }
+  .tool-btn.active { border-color: #FFD700; background: rgba(255,215,0,0.2); color: #FFD700; }
+  .tool-icon { font-size: 22px; } .tool-count { color: #888; font-size: 10px; }
+  #overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.88); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 200; text-align: center; padding: 20px; }
+  #overlay h1 { font-size: clamp(24px,6vw,48px); color: #FFD700; margin-bottom: 12px; }
+  #overlay p { color: #ccc; margin-bottom: 12px; font-size: clamp(12px,2.5vw,16px); max-width: 500px; line-height:1.6; }
+  .big-btn { padding: 14px 32px; font-size: 17px; border: none; border-radius: 25px; cursor: pointer; font-weight: bold; background: linear-gradient(135deg,#FF6B6B,#ee0979); color: white; margin: 5px; transition: transform 0.2s; }
+  .big-btn:hover { transform: scale(1.05); } .btn-green { background: linear-gradient(135deg,#4ECDC4,#44a08d) !important; }
+  .effect { position: fixed; pointer-events: none; z-index: 150; font-size: 22px; animation: floatUp 1s ease-out forwards; }
+  @keyframes floatUp { 0%{opacity:1;transform:translateY(0) scale(1)} 100%{opacity:0;transform:translateY(-70px) scale(1.5)} }
+  .legend { display:flex; gap:15px; flex-wrap:wrap; justify-content:center; }
+</style>
 </head>
 <body>
-  <main id="app">
-    <section id="home" class="screen active">
-      <h1>Bienvenue</h1>
-      <p>Prêt à deviner des mots ?</p>
-      <button id="startBtn" class="btn">Démarrer</button>
-    </section>
+<canvas id="gameCanvas"></canvas>
+<div id="hud">
+  <span id="levelDisplay">NIVEAU 1</span>
+  <span><span class="hud-label">🐀 </span><span class="hud-val" id="ratsDisplay">0</span></span>
+  <span><span class="hud-label">⭐ </span><span class="hud-val" id="scoreDisplay">0</span></span>
+  <span><span class="hud-label">⏱️ </span><span class="hud-val" id="timerDisplay">60s</span></span>
+  <span><span class="hud-label">💀 </span><span class="hud-val" id="killedDisplay">0</span></span>
+</div>
+<div id="toolbar">
+  <div class="tool-btn active" id="btn-poison" onclick="selectTool('poison',this)"><span class="tool-icon">☠️</span><span>Poison</span><span class="tool-count" id="count-poison">∞</span></div>
+  <div class="tool-btn" id="btn-smoke" onclick="selectTool('smoke',this)"><span class="tool-icon">💨</span><span>Fumigène</span><span class="tool-count" id="count-smoke">3</span></div>
+  <div class="tool-btn" id="btn-trap" onclick="selectTool('trap',this)"><span class="tool-icon">🪤</span><span>Piège</span><span class="tool-count" id="count-trap">5</span></div>
+  <div class="tool-btn" id="btn-electricity" onclick="selectTool('electricity',this)"><span class="tool-icon">⚡</span><span>Électrique</span><span class="tool-count" id="count-electricity">2</span></div>
+  <div class="tool-btn" id="btn-bomb" onclick="selectTool('bomb',this)"><span class="tool-icon">💣</span><span>Bombe</span><span class="tool-count" id="count-bomb">1</span></div>
+  <div class="tool-btn" id="btn-ultrasound" onclick="selectTool('ultrasound',this)"><span class="tool-icon">📡</span><span>Ultrasons</span><span class="tool-count" id="count-ultrasound">2</span></div>
+</div>
+<div id="overlay">
+  <h1>🐀 RAT DESTROYER 🐀</h1>
+  <p>Les égouts sont infestés ! Éliminez tous les rats.</p>
+  <div class="legend"><span>🩷 Femelles roses</span><span>💙 Mâles bleus</span><span>⚫ Bébés gris</span></div><br>
+  <p style="color:#FF6B6B">⚠️ Chaque niveau, ils se reproduisent plus vite !</p>
+  <button class="big-btn" onclick="startGame()">▶ JOUER</button>
+</div>
+<script>
+const canvas=document.getElementById('gameCanvas'),ctx=canvas.getContext('2d');
+let W,H;
+function resize(){W=canvas.width=window.innerWidth;H=canvas.height=window.innerHeight;}
+resize();window.addEventListener('resize',resize);
+let level=1,score=0,totalKilled=0;
+let rats=[],traps=[],poisonZones=[],smokeZones=[],electricZones=[],blastFX=[];
+let gameRunning=false,selectedTool='poison';
+let inventory={poison:Infinity,smoke:3,trap:5,electricity:2,bomb:1,ultrasound:2};
+let spawnTimer=0,levelTimer=60,lastTime=0,bgCache=null;
 
-    <section id="game" class="screen">
-      <div class="top-row">
-        <div class="status">
-          <div><strong>Mot</strong></div>
-          <div id="wordDisplay" class="word"></div>
-        </div>
-        <div class="info">
-          <div><strong>Essais restants</strong></div>
-          <div id="tries">0</div>
-        </div>
-      </div>
+function genBg(){
+  let off=document.createElement('canvas');off.width=W;off.height=H;
+  let c=off.getContext('2d');
+  c.fillStyle='#110d04';c.fillRect(0,0,W,H);
+  for(let x=0;x<W;x+=80)for(let y=0;y<H;y+=80){
+    let t=Math.random();
+    c.fillStyle=t<0.3?'#2d1f0e':t<0.6?'#1c2a1c':'#231808';c.fillRect(x+1,y+1,78,78);
+    if(t<0.3){c.strokeStyle='#3d2a12';c.lineWidth=1;c.strokeRect(x+2,y+2,76,76);}
+  }
+  c.strokeStyle='#3a3a2a';c.lineWidth=12;
+  c.beginPath();c.moveTo(0,H*0.12);c.lineTo(W,H*0.12);c.stroke();
+  c.beginPath();c.moveTo(0,H*0.88);c.lineTo(W,H*0.88);c.stroke();
+  c.fillStyle='#555';
+  for(let x=60;x<W;x+=120){c.beginPath();c.arc(x,H*0.12,6,0,Math.PI*2);c.fill();c.beginPath();c.arc(x,H*0.88,6,0,Math.PI*2);c.fill();}
+  bgCache=off;
+}
 
-      <div class="controls">
-        <label for="letterInput">Proposer une lettre</label>
-        <input id="letterInput" maxlength="1" autocomplete="off" />
-        <button id="guessBtn" class="btn">Proposer</button>
-        <button id="giveUpBtn" class="btn alt">Abandonner</button>
-      </div>
+function drawBg(){
+  if(bgCache)ctx.drawImage(bgCache,0,0);
+  let t=Date.now()*0.001;
+  ctx.fillStyle='rgba(0,40,80,0.5)';ctx.fillRect(0,H*0.4,W,H*0.07);ctx.fillRect(0,H*0.7,W,H*0.04);
+  ctx.fillStyle='rgba(0,100,200,0.1)';
+  for(let i=0;i<8;i++){ctx.fillRect((Math.sin(t+i*0.8)*0.4+0.5)*W,H*0.4,60,H*0.07);ctx.fillRect((Math.cos(t*0.7+i)*0.4+0.5)*W,H*0.7,40,H*0.04);}
+  ctx.fillStyle='rgba(0,100,150,0.5)';
+  for(let i=0;i<5;i++){let dx=(i*137+t*30)%W,dy=H*0.12+(t*50+i*80)%(H*0.27);ctx.beginPath();ctx.arc(dx,dy,2.5,0,Math.PI*2);ctx.fill();}
+}
 
-      <div class="guessed">
-        <div><strong>Lettres proposées</strong></div>
-        <div id="guessedLetters">-</div>
-      </div>
+class Rat{
+  constructor(x,y,gender,baby){
+    this.x=x!==undefined?x:Math.random()*W;this.y=y!==undefined?y:(Math.random()*(H*0.65)+H*0.17);
+    this.gender=gender||(Math.random()<0.5?'F':'M');this.baby=baby!==undefined?baby:false;
+    this.age=this.baby?0:100;this.size=this.baby?5:12;
+    this.alive=true;this.health=100;this.poisoned=false;this.frightened=false;this.stunned=0;
+    this.vx=(Math.random()-0.5)*3;this.vy=(Math.random()-0.5)*3;this.angle=0;this.tail=[];
+    this.reproduceCooldown=180+Math.random()*250;this.opacity=1;this.changeDir=0;
+  }
+  get isAdult(){return this.age>=80;}
+  get color(){if(!this.isAdult)return'#8a8a8a';return this.gender==='F'?'#FF69B4':'#4169E1';}
+  update(dt){
+    if(!this.alive){this.opacity=Math.max(0,this.opacity-dt*1.5);return;}
+    this.age+=dt*12;this.size=Math.min(12,5+(this.age/80)*7);
+    if(this.stunned>0){this.stunned-=dt;return;}
+    if(this.poisoned){this.health-=dt*10;if(this.health<=0){this.die();return;}}
+    this.changeDir-=dt;
+    if(this.changeDir<=0){
+      let spd=this.frightened?4.5:(1.5+Math.random()*0.8),a=Math.random()*Math.PI*2;
+      this.vx=Math.cos(a)*spd;this.vy=Math.sin(a)*spd;this.changeDir=0.5+Math.random()*1.5;
+    }
+    this.frightened=false;
+    if(this.y>H*0.4&&this.y<H*0.47)this.vy-=1.5;
+    if(this.y>H*0.7&&this.y<H*0.74)this.vy-=1.5;
+    this.x+=this.vx;this.y+=this.vy;
+    if(this.x<8){this.x=8;this.vx=Math.abs(this.vx);}if(this.x>W-8){this.x=W-8;this.vx=-Math.abs(this.vx);}
+    if(this.y<H*0.14){this.y=H*0.14;this.vy=Math.abs(this.vy);}if(this.y>H*0.86){this.y=H*0.86;this.vy=-Math.abs(this.vy);}
+    this.angle=Math.atan2(this.vy,this.vx);
+    this.tail.unshift({x:this.x,y:this.y});if(this.tail.length>10)this.tail.pop();
+    for(let pz of poisonZones){if(!pz.active)continue;let dx=this.x-pz.x,dy=this.y-pz.y;if(dx*dx+dy*dy<pz.r*pz.r)this.poisoned=true;}
+    for(let sz of smokeZones){if(!sz.active)continue;let dx=this.x-sz.x,dy=this.y-sz.y,d2=dx*dx+dy*dy;if(d2<sz.r*sz.r){this.health-=dt*20;if(this.health<=0){this.die();return;}let d=Math.sqrt(d2)||1;this.vx+=(dx/d)*5;this.vy+=(dy/d)*5;}}
+    for(let t of traps){if(!t.active)continue;let dx=this.x-t.x,dy=this.y-t.y;if(dx*dx+dy*dy<400){t.active=false;fx('🪤',t.x,t.y);this.die();return;}}
+    for(let ez of electricZones){if(!ez.active)continue;let dx=this.x-ez.x,dy=this.y-ez.y;if(dx*dx+dy*dy<ez.r*ez.r){fx('⚡',this.x,this.y);this.die();return;}}
+    if(this.isAdult&&this.gender==='F'){this.reproduceCooldown-=dt;if(this.reproduceCooldown<=0)this.tryReproduce();}
+  }
+  tryReproduce(){
+    for(let r of rats){if(!r.alive||r===this||r.gender!=='M'||!r.isAdult)continue;let dx=this.x-r.x,dy=this.y-r.y;if(dx*dx+dy*dy<5000){let babies=2+Math.floor(Math.random()*2*level),alive=rats.filter(r=>r.alive).length;for(let i=0;i<babies&&alive+i<150;i++)rats.push(new Rat(this.x+(Math.random()-0.5)*40,this.y+(Math.random()-0.5)*40,Math.random()<0.5?'F':'M',true));fx('🐭',this.x,this.y);break;}}
+    this.reproduceCooldown=Math.max(25,200/level);
+  }
+  die(){if(!this.alive)return;this.alive=false;totalKilled++;score+=this.isAdult?10:5;}
+  draw(){
+    if(this.opacity<=0)return;
+    ctx.save();ctx.globalAlpha=this.alive?1:this.opacity;ctx.translate(this.x,this.y);
+    if(this.tail.length>1){ctx.beginPath();ctx.moveTo(0,0);for(let t of this.tail)ctx.lineTo(t.x-this.x,t.y-this.y);ctx.strokeStyle=this.alive?(this.gender==='F'?'#cc4488':'#2244aa'):'#444';ctx.lineWidth=Math.max(1,this.size*0.3);ctx.lineCap='round';ctx.stroke();}
+    if(!this.alive){ctx.restore();return;}
+    ctx.rotate(this.angle);
+    let col=this.poisoned?'#90EE90':this.color;
+    ctx.fillStyle='rgba(0,0,0,0.4)';ctx.beginPath();ctx.ellipse(2,2,this.size*1.2,this.size*0.8,0,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle=col;ctx.beginPath();ctx.ellipse(0,0,this.size*1.2,this.size*0.8,0,0,Math.PI*2);ctx.fill();
+    ctx.beginPath();ctx.arc(this.size*0.9,0,this.size*0.65,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle=!this.isAdult?'#777':(this.gender==='F'?'#ff9ec0':'#6b8dd6');
+    ctx.beginPath();ctx.arc(this.size*0.7,-this.size*0.6,this.size*0.3,0,Math.PI*2);ctx.fill();
+    ctx.beginPath();ctx.arc(this.size*1.0,-this.size*0.6,this.size*0.3,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle='#ff0000';ctx.beginPath();ctx.arc(this.size*1.1,-this.size*0.15,1.5,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle='#000';ctx.beginPath();ctx.arc(this.size*1.15,-this.size*0.15,0.8,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle='#ffaaaa';ctx.beginPath();ctx.arc(this.size*1.55,0,1.5,0,Math.PI*2);ctx.fill();
+    if(this.health<100){ctx.fillStyle='rgba(255,0,0,0.7)';ctx.fillRect(-this.size,-this.size*1.8,this.size*2,3);ctx.fillStyle='rgba(0,255,0,0.7)';ctx.fillRect(-this.size,-this.size*1.8,this.size*2*(this.health/100),3);}
+    ctx.restore();
+  }
+}
 
-      <div id="message" class="message"></div>
+function fx(emoji,x,y){let el=document.createElement('div');el.className='effect';el.textContent=emoji;el.style.left=x+'px';el.style.top=(y-20)+'px';document.body.appendChild(el);setTimeout(()=>el.remove(),1000);}
 
-      <div class="footer">
-        <button id="restartBtn" class="btn">Recommencer</button>
-        <div class="hint"><strong>Astuce</strong> : vous pouvez aussi taper une lettre et appuyer sur Entrée.</div>
-      </div>
-    </section>
-  </main>
+function selectTool(tool,el){selectedTool=tool;document.querySelectorAll('.tool-btn').forEach(b=>b.classList.remove('active'));el.classList.add('active');}
 
-  <script src="words.js"></script>
-  <script src="script.js"></script>
+function useTool(x,y){
+  if(inventory[selectedTool]!==Infinity&&inventory[selectedTool]<=0){fx('❌',x,y);return;}
+  switch(selectedTool){
+    case'poison':poisonZones.push({x,y,r:42,active:true,timer:9});fx('☠️',x,y);break;
+    case'smoke':inventory.smoke--;smokeZones.push({x,y,r:90,active:true,timer:6});fx('💨',x,y);break;
+    case'trap':inventory.trap--;traps.push({x,y,active:true});fx('🪤',x,y);break;
+    case'electricity':inventory.electricity--;electricZones.push({x,y,r:65,active:true,timer:3});for(let r of rats){if(!r.alive)continue;let dx=r.x-x,dy=r.y-y;if(dx*dx+dy*dy<4225){fx('⚡',r.x,r.y);r.die();}}fx('⚡',x,y);break;
+    case'bomb':inventory.bomb--;blastFX.push({x,y,r:0,maxR:140,timer:0.6,type:'blast'});for(let r of rats){if(!r.alive)continue;let dx=r.x-x,dy=r.y-y;if(dx*dx+dy*dy<19600){fx('💀',r.x,r.y);r.die();}}fx('💥',x,y);break;
+    case'ultrasound':inventory.ultrasound--;blastFX.push({x,y,r:0,maxR:230,timer:1.0,type:'wave'});for(let r of rats){if(!r.alive)continue;let dx=r.x-x,dy=r.y-y;if(dx*dx+dy*dy<52900){r.frightened=true;r.stunned=2.5;r.health-=35;if(r.health<=0){fx('😵',r.x,r.y);r.die();}}}fx('📡',x,y);break;
+  }
+  updateInventoryUI();
+}
+
+canvas.addEventListener('click',e=>{if(gameRunning)useTool(e.clientX,e.clientY);});
+canvas.addEventListener('touchstart',e=>{if(!gameRunning)return;e.preventDefault();useTool(e.touches[0].clientX,e.touches[0].clientY);},{passive:false});
+
+function updateInventoryUI(){for(let k in inventory){let el=document.getElementById('count-'+k);if(el)el.textContent=inventory[k]===Infinity?'∞':inventory[k];}}
+function updateHUD(){let alive=rats.filter(r=>r.alive).length;document.getElementById('ratsDisplay').textContent=alive;document.getElementById('scoreDisplay').textContent=score;document.getElementById('killedDisplay').textContent=totalKilled;document.getElementById('timerDisplay').textContent=Math.ceil(levelTimer)+'s';document.getElementById('levelDisplay').textContent='NIVEAU '+level;}
+function spawnRat(){if(rats.filter(r=>r.alive).length>=150)return;let edge=Math.floor(Math.random()*4),x,y;if(edge===0){x=Math.random()*W;y=H*0.15;}else if(edge===1){x=Math.random()*W;y=H*0.85;}else if(edge===2){x=12;y=Math.random()*H*0.65+H*0.18;}else{x=W-12;y=Math.random()*H*0.65+H*0.18;}rats.push(new Rat(x,y));}
+
+function startGame(nextLevel){
+  document.getElementById('overlay').style.display='none';
+  if(!nextLevel){level=1;score=0;totalKilled=0;}
+  rats=[];traps=[];poisonZones=[];smokeZones=[];electricZones=[];blastFX=[];
+  let b=Math.floor(level/2);inventory={poison:Infinity,smoke:3+b,trap:5+level,electricity:2+Math.floor(level/2),bomb:1+Math.min(3,level-1),ultrasound:2+Math.floor(level/3)};
+  updateInventoryUI();levelTimer=60+level*10;spawnTimer=0;
+  for(let i=0;i<5+level*3;i++)spawnRat();
+  genBg();gameRunning=true;lastTime=performance.now();requestAnimationFrame(loop);
+}
+
+function endLevel(won){
+  gameRunning=false;let ov=document.getElementById('overlay');ov.style.display='flex';
+  if(won){level++;ov.innerHTML=`<h1>🎉 NIVEAU ${level-1} RÉUSSI !</h1><p>Score: <b style="color:#4ECDC4">${score}</b> | Tués: <b style="color:#FF6B6B">${totalKilled}</b></p><p style="color:#FFD700">NIVEAU ${level} — Reproduction <b>${level}×</b> plus rapide !</p><button class="big-btn" onclick="startGame(true)">▶ NIVEAU ${level}</button><button class="big-btn btn-green" onclick="resetGame()">🏠 Menu</button>`;}
+  else{ov.innerHTML=`<h1>💀 GAME OVER</h1><p>Les rats ont envahi les égouts...</p><p>Score: <b style="color:#4ECDC4">${score}</b> | Tués: <b style="color:#FF6B6B">${totalKilled}</b></p><button class="big-btn" onclick="resetGame()">🔄 Recommencer</button>`;}
+}
+
+function resetGame(){level=1;score=0;totalKilled=0;let ov=document.getElementById('overlay');ov.innerHTML=`<h1>🐀 RAT DESTROYER 🐀</h1><p>Les égouts sont infestés !</p><div class="legend"><span>🩷 Femelles roses</span><span>💙 Mâles bleus</span><span>⚫ Bébés gris</span></div><br><p style="color:#FF6B6B">⚠️ Chaque niveau, ils se reproduisent plus vite !</p><button class="big-btn" onclick="startGame()">▶ JOUER</button>`;ov.style.display='flex';}
+
+function drawZone(x,y,r,c0,c1,emoji){let g=ctx.createRadialGradient(x,y,0,x,y,r);g.addColorStop(0,c0);g.addColorStop(1,c1);ctx.fillStyle=g;ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.fill();if(emoji){ctx.font='20px serif';ctx.textAlign='center';ctx.fillText(emoji,x,y+7);}}
+
+function loop(ts){
+  if(!gameRunning)return;
+  let dt=Math.min((ts-lastTime)/1000,0.1);lastTime=ts;levelTimer-=dt;
+  spawnTimer-=dt;let spawnInterval=Math.max(0.35,3-level*0.25),alive=rats.filter(r=>r.alive).length;
+  if(spawnTimer<=0&&alive<Math.min(60+level*15,150)){spawnRat();spawnTimer=spawnInterval;}
+  for(let z of[...poisonZones,...smokeZones,...electricZones])if(z.active){z.timer-=dt;if(z.timer<=0)z.active=false;}
+  for(let b of blastFX){b.timer-=dt;b.r=b.maxR*(1-b.timer);}
+  blastFX=blastFX.filter(b=>b.timer>0);
+  for(let r of rats)r.update(dt);
+  rats=rats.filter(r=>r.alive||r.opacity>0);
+  updateHUD();
+  alive=rats.filter(r=>r.alive).length;
+  if(levelTimer<=0){endLevel(alive===0);return;}
+  drawBg();
+  for(let pz of poisonZones)if(pz.active)drawZone(pz.x,pz.y,pz.r,'rgba(0,210,0,0.55)','rgba(0,100,0,0)','☠️');
+  for(let sz of smokeZones)if(sz.active)drawZone(sz.x,sz.y,sz.r,'rgba(200,230,180,0.65)','rgba(150,180,130,0)','💨');
+  for(let ez of electricZones)if(ez.active)drawZone(ez.x,ez.y,ez.r,'rgba(255,255,100,0.6)','rgba(100,100,255,0)','⚡');
+  for(let t of traps)if(t.active){ctx.font='22px serif';ctx.textAlign='center';ctx.fillText('🪤',t.x,t.y+8);}
+  for(let b of blastFX){if(b.type==='blast'){let g=ctx.createRadialGradient(b.x,b.y,0,b.x,b.y,b.r||1);g.addColorStop(0,'rgba(255,200,0,0.9)');g.addColorStop(0.5,'rgba(255,80,0,0.5)');g.addColorStop(1,'rgba(100,0,0,0)');ctx.fillStyle=g;ctx.beginPath();ctx.arc(b.x,b.y,b.r||1,0,Math.PI*2);ctx.fill();}else{ctx.strokeStyle=`rgba(100,220,255,${Math.max(0,b.timer)})`;ctx.lineWidth=3;ctx.beginPath();ctx.arc(b.x,b.y,b.r||1,0,Math.PI*2);ctx.stroke();}}
+  for(let r of rats)r.draw();
+  if(levelTimer<15){ctx.fillStyle=`rgba(255,0,0,${0.08+Math.abs(Math.sin(Date.now()*0.006))*0.1})`;ctx.fillRect(0,0,W,H);}
+  requestAnimationFrame(loop);
+}
+</script>
 </body>
 </html>
